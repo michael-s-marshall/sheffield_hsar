@@ -1,12 +1,11 @@
 pacman::p_load(tidyverse, spdep, spatialreg, tmap, RColorBrewer)
 
-setwd("G:/My Drive/GIS")
 rm(list = ls())
 
 load("twenty_two.RData")
 
 # url <- "https://cran.r-project.org/src/contrib/Archive/HSAR/HSAR_0.5.tar.gz"
-# install.packages(url, type="source", repos=NULL)
+#install.packages(url, type="source", repos=NULL)
 library(HSAR)
 
 # Define the random effect matrix
@@ -72,10 +71,10 @@ summary(res)
 # visualise the district level random effect
 library(classInt)
 x <- as.numeric(res$Mus)
-break_n <- 4
+break_n <- 7
 breaks <- classIntervals(x,break_n,"equal")$brks
 groups <- cut(x,breaks,include.lowest=TRUE,labels=FALSE)
-palette <- viridisLite::viridis(option = "viridis",n = break_n, alpha = .5)
+palette <- viridisLite::viridis(option = "turbo",n = break_n, alpha = .5)
 # plot(msoas["MSOA11CD"],col=palette[groups],border="grey")
 # }
 # NOT RUN {
@@ -83,6 +82,7 @@ palette <- viridisLite::viridis(option = "viridis",n = break_n, alpha = .5)
 
 tmap_mode("view")
 msoas$groups <- cut(x,breaks,include.lowest=TRUE,labels=FALSE)
+msoas$x <- x
 
 tm_shape(msoas) + 
   tm_fill(col = "groups", title = "",
@@ -102,3 +102,41 @@ mlm_mod <- lmer(price ~ imd_score + (1|MSOA11CD),
                 data = model.data, REML = FALSE)
 
 jtools::summ(mlm_mod)
+
+ran_ints <- tibble(ranefs = ranef(mlm_mod)$MSOA11CD$`(Intercept)`,
+                   MSOA11CD = row.names(ranef(mlm_mod)$MSOA11CD))
+
+msoas <- msoas %>% 
+  left_join(ran_ints, by = "MSOA11CD")
+
+breaks2 <- classIntervals(msoas$ranefs,break_n,"equal")$brks
+groups2 <- cut(msoas$ranefs,breaks2,include.lowest=TRUE,labels=FALSE)
+
+msoas$groups2 <- cut(msoas$ranefs,breaks2,include.lowest=TRUE,labels=FALSE)
+
+tm_shape(msoas) + 
+  tm_fill(col = "groups2", title = "",
+          palette =  palette) +
+  tm_legend(text.size = 1)  + tm_borders(alpha = 0.5) +
+  tm_layout(frame = FALSE,  title = "MLM Clusters")  +
+  tm_layout(legend.outside = TRUE)
+
+# ggplot ----------------------------------------------------------------
+
+pacman::p_load(patchwork)
+
+p1 <- msoas %>% 
+  ggplot(aes(fill = scale(x))) +
+  geom_sf(alpha = 0.8, show.legend = FALSE) +
+  scale_fill_viridis_c(option = "turbo") +
+  theme_void() +
+  labs(fill = "Random\neffects")
+
+p2 <- msoas %>% 
+  ggplot(aes(fill = scale(ranefs))) +
+  geom_sf(alpha = 0.8) +
+  scale_fill_viridis_c(option = "turbo") +
+  theme_void() +
+  labs(fill = "Random\neffects")
+
+p1 + p2
