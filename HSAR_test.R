@@ -1,4 +1,5 @@
-pacman::p_load(tidyverse, spdep, spatialreg, tmap, RColorBrewer)
+pacman::p_load(tidyverse, spdep, spatialreg, tmap, RColorBrewer,
+               mapview, viridisLite, leaflet.extras2)
 
 rm(list = ls())
 
@@ -96,12 +97,12 @@ res$DIC
 
 # mlm model ---------------------------------------------------------------
 
-pacman::p_load(lme4, lmerTest)
+pacman::p_load(lme4, lmerTest, jtools)
 
 mlm_mod <- lmer(price ~ imd_score + (1|MSOA11CD),
                 data = model.data, REML = FALSE)
 
-jtools::summ(mlm_mod)
+summ(mlm_mod)
 
 ran_ints <- tibble(ranefs = ranef(mlm_mod)$MSOA11CD$`(Intercept)`,
                    MSOA11CD = row.names(ranef(mlm_mod)$MSOA11CD))
@@ -140,3 +141,23 @@ p2 <- msoas %>%
   labs(fill = "Random\neffects")
 
 p1 + p2
+
+# leaflet slider map ------------------------------------------------------
+
+msoas_l <- st_transform(msoas, 4326)
+
+Sheffield <- msoas_l %>% 
+  mutate(HSAR = scale(x)[,1],
+         MLM = scale(ranefs)[,1])
+
+pal <- colorRampPalette(viridis(n=8))
+at1 <- seq(min(Sheffield$HSAR),max(Sheffield$HSAR),length.out = 7)
+at2 <- seq(min(Sheffield$MLM),max(Sheffield$MLM),length.out = 7)
+
+m1 <- mapview(Sheffield, zcol = "HSAR", map.types = "CartoDB.Positron",
+              col.regions = pal, at = at1)
+m2 <- mapview(Sheffield, zcol = "MLM", map.types = "CartoDB.Positron",
+              col.regions = pal, at = at2)
+
+m1 | m2
+
